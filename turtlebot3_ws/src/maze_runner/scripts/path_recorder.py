@@ -1,98 +1,91 @@
-#!/usr/bin/env python
-
+#!/usr/bin/env python3
 import rospy
+import tf
 import math
-from nav_msgs.msg import Odometry
 from geometry_msgs.msg import PoseStamped
-from tf.transformations import euler_from_quaternion
 
 class PathRecorder:
     def __init__(self):
         rospy.init_node('path_recorder_node', anonymous=True)
         
-        # Parameters for recording thresholds
-        self.distance_threshold = 0.5  # meters
-        self.angle_threshold = math.radians(20)  # degrees
+        # Parameters
+        self.min_distance = rospy.get_param("~min_distance", 0.5)  # Minimum distance between waypoints
+        self.min_angle_change = rospy.get_param("~min_angle_change", 0.3)  # Minimum angle change (radians)
         
-        # Storage for recorded path
+        # TF listener for getting robot position
+        self.tf_listener = tf.TransformListener()
+        
+        # Recorded path storage
         self.recorded_path = []
         self.last_recorded_pose = None
         self.last_recorded_yaw = None
         
-        # Subscribe to odometry
-        self.odom_sub = rospy.Subscriber('/odom', Odometry, self.odom_callback)
+        # Timer for recording
+        self.recording_timer = rospy.Timer(rospy.Duration(0.2), self.record_position)
         
-        rospy.loginfo("Path recorder initialized. Recording path with thresholds: %.1fm, %.0f°", 
-                     self.distance_threshold, math.degrees(self.angle_threshold))
-    
-    def odom_callback(self, msg):
-        current_pose = msg.pose.pose
-        
-        # Extract position and orientation
-        x = current_pose.position.x
-        y = current_pose.position.y
-        
-        # Convert quaternion to yaw angle
-        orientation_q = current_pose.orientation
-        _, _, yaw = euler_from_quaternion([orientation_q.x, orientation_q.y, orientation_q.z, orientation_q.w])
-        
-        # Check if we should record this pose
-        if self.should_record_pose(x, y, yaw):
-            pose_stamped = PoseStamped()
-            pose_stamped.header = msg.header
-            pose_stamped.pose = current_pose
+        rospy.loginfo("Path Recorder started - recording waypoints every 0.2s")
+        rospy.loginfo("Min distance: {}m, Min angle change: {} rad".format(self.min_distance, self.min_angle_change))
+
+    def get_current_pose_and_yaw(self):
+        """Get current robot pose and yaw angle"""
+        try:
+            (trans, rot) = self.tf_listener.lookupTransform('/map', '/base_link', rospy.Time(0))
             
-            self.recorded_path.append(pose_stamped)
-            self.last_recorded_pose = (x, y)
-            self.last_recorded_yaw = yaw
+            # Convert quaternion to yaw
+            yaw = tf.transformations.euler_from_quaternion(rot)[2]
             
-            # Store in ROS parameter for other nodes to access
-            self.update_path_parameter()
-            
-            rospy.loginfo("Recorded pose #%d: (%.2f, %.2f, %.1f°)", 
-                         len(self.recorded_path), x, y, math.degrees(yaw))
-    
-    def should_record_pose(self, x, y, yaw):
+            return trans[0], trans[1], yaw
+        except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
+            return None, None, None
+
+    def should_record_waypoint(self, x, y, yaw):
+        """Determine if current position should be recorded as waypoint"""
         if self.last_recorded_pose is None:
             return True
         
-        # Calculate distance from last recorded pose
+        # Calculate distance from last recorded position
         dx = x - self.last_recorded_pose[0]
         dy = y - self.last_recorded_pose[1]
         distance = math.sqrt(dx*dx + dy*dy)
         
-        # Calculate angle difference
-        angle_diff = abs(yaw - self.last_recorded_yaw)
-        # Normalize angle difference to [-pi, pi]
-        while angle_diff > math.pi:
-            angle_diff -= 2 * math.pi
-        angle_diff = abs(angle_diff)
+        # Calculate angle change
+        angle_change = abs(yaw - self.last_recorded_yaw)
+        if angle_change > math.pi:
+            angle_change = 2*math.pi - angle_change
         
-        # Record if either threshold is exceeded
-        return distance >= self.distance_threshold or angle_diff >= self.angle_threshold
-    
-    def update_path_parameter(self):
-        # Convert path to parameter format
-        path_data = []
-        for pose_stamped in self.recorded_path:
-            pose = pose_stamped.pose
-            path_data.append({
-                'x': pose.position.x,
-                'y': pose.position.y,
-                'z': pose.position.z,
-                'qx': pose.orientation.x,
-                'qy': pose.orientation.y,
-                'qz': pose.orientation.z,
-                'qw': pose.orientation.w
-            })
+        # Record if moved far enough or turned significantly
+        return distance >= self.min_distance or angle_change >= self.min_angle_change
+
+    def record_position(self, event):
+        """Record current position if criteria met"""
+        x, y, yaw = self.get_current_pose_and_yaw()
+        if x is None:
+            return
         
-        # Store in ROS parameter server
-        rospy.set_param('/path_recorder_node/recorded_path', path_data)
-        rospy.set_param('/path_recorder_node/path_length', len(path_data))
+        if self.should_record_waypoint(x, y, yaw):
+            waypoint = {
+                'x': x,
+                'y': y,
+                'yaw': yaw,
+                'timestamp': rospy.Time.now().to_sec()
+            }
+            
+            self.recorded_path.append(waypoint)
+            self.last_recorded_pose = (x, y)
+            self.last_recorded_yaw = yaw
+            
+            # Store on parameter server for retractor to access
+            rospy.set_param("/path_recorder_node/recorded_path", self.recorded_path)
+            
+            rospy.loginfo("Recorded waypoint #{}: ({:.2f}, {:.2f}, {:.2f})".format(len(self.recorded_path), x, y, yaw))
+
+    def get_recorded_path(self):
+        """Get the full recorded path"""
+        return self.recorded_path
 
 if __name__ == '__main__':
     try:
         recorder = PathRecorder()
         rospy.spin()
     except rospy.ROSInterruptException:
-        rospy.loginfo("Path recorder shutting down")
+        pass

@@ -1,54 +1,104 @@
-# Maze Runner - Manual Exploration
+# Maze Runner - Manual Exploration & Autonomous Retraction
 
-Simple TurtleBot3 manual maze exploration with path recording.
+Clean TurtleBot3 maze navigation system with manual exploration and service-triggered autonomous retraction.
 
 ## Features
-- Manual robot control with teleop
-- Automatic path recording during exploration
-- Simple maze environment in Gazebo
+- **Manual WASD control** for maze exploration
+- **Automatic path recording** during manual navigation  
+- **Service-triggered A* retraction** for autonomous return to start
+- **SLAM mapping** for environment visualization
 
-## Quick Start
+## Simple Workflow
 
-### 1. Build and Source
+### Step 1: Launch Manual Exploration
 ```bash
 cd /turtlebot3_ws
-catkin_make
 source devel/setup.bash
-```
-
-### 2. Set Robot Model
-```bash
 export TURTLEBOT3_MODEL=burger
-```
-
-### 3. Launch Manual Exploration
-```bash
 roslaunch maze_runner manual_exploration.launch
 ```
 This starts:
 - Gazebo with maze world
-- TurtleBot3 robot
-- SLAM mapping
-- Path recorder
+- TurtleBot3 robot at starting position
+- SLAM mapping with RViz visualization
+- Path recorder (automatically recording waypoints)
+- Navigation stack (move_base) ready for retraction
 
-### 4. Manual Control (Second Terminal)
+### Step 2: Manual Control (New Terminal)
 ```bash
 cd /turtlebot3_ws
 source devel/setup.bash
+export TURTLEBOT3_MODEL=burger
 roslaunch turtlebot3_teleop turtlebot3_teleop_key.launch
 ```
 
-Control keys:
-- `w`: forward
-- `a`: turn left  
-- `s`: stop
-- `d`: turn right
-- `x`: backward
+**Controls:**
+- `w` - Move forward
+- `a` - Turn left  
+- `s` - Stop
+- `d` - Turn right
+- `x` - Move backward
 
-## Path Recording
-- Automatically records your exploration path
-- Records poses every 0.5m or 20° rotation
-- Path stored in ROS parameter: `/path_recorder_node/recorded_path`
+### Step 3: Start A* Retractor (New Terminal)
+```bash
+cd /turtlebot3_ws
+source devel/setup.bash
+export TURTLEBOT3_MODEL=burger
+python3 /turtlebot3_ws/src/maze_runner/scripts/simple_astar_retractor.py
+```
+
+### Step 4: Trigger Autonomous Retraction (New Terminal)
+```bash
+cd /turtlebot3_ws
+source devel/setup.bash
+rosservice call /simple_astar_retractor/trigger_retraction "{}"
+```
+
+The robot will autonomously navigate back to the starting position using the recorded waypoints.
+
+## System Components
+
+### Essential Files
+- `launch/manual_exploration.launch` - Main system launcher (Gazebo + SLAM + path recording)
+- `scripts/path_recorder.py` - Records waypoints during manual exploration
+- `scripts/simple_astar_retractor.py` - Autonomous retraction service
+- `launch/smooth_move_base.launch` - Navigation configuration for smooth movement
+
+### Path Recording
+- **Automatic**: Records waypoints as you explore manually
+- **Distance threshold**: 0.8m between waypoints
+- **Angle threshold**: 0.5 radians (29°) rotation change
+- **Storage**: ROS parameter `/path_recorder_node/recorded_path`
+
+### A* Retraction
+- **Trigger**: ROS service `/simple_astar_retractor/trigger_retraction`
+- **Algorithm**: Uses recorded waypoints for autonomous navigation
+- **Navigation**: move_base with obstacle avoidance
+
+## Quick Commands
+
+```bash
+# Launch exploration
+roslaunch maze_runner manual_exploration.launch
+
+# Manual control (new terminal)
+roslaunch turtlebot3_teleop turtlebot3_teleop_key.launch
+
+# Start retractor (new terminal)  
+python3 /turtlebot3_ws/src/maze_runner/scripts/simple_astar_retractor.py
+
+# Trigger retraction (new terminal)
+rosservice call /simple_astar_retractor/trigger_retraction "{}"
+
+# Monitor recorded path
+rosparam get /path_recorder_node/recorded_path
+```
+
+## Troubleshooting
+
+- **No path recorded**: Move robot manually first before triggering retraction
+- **move_base not found**: Ensure manual_exploration.launch is running
+- **Retraction timeout**: Normal behavior if path is long or obstacles block route
 
 ## Check Recorded Path
 ```bash
