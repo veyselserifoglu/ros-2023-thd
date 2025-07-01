@@ -1,0 +1,70 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="model" default="burger"/>
+  <arg name="map_file" default="$(find maze_explorer)/maps/maze_map.yaml"/>
+  <arg name="open_rviz" default="true"/>
+  <arg name="move_forward_only" default="false"/>
+  <arg name="initial_pose_x" default="-4.0"/>
+  <arg name="initial_pose_y" default="4.0"/>
+  <arg name="initial_pose_a" default="0.0"/>
+  <arg name="target_pose_x" default="4.0"/>
+  <arg name="target_pose_y" default="-4.0"/>
+  
+  <include file="$(find gazebo_ros)/launch/empty_world.launch">
+    <arg name="world_name" value="$(find maze_explorer)/worlds/maze_world.world"/>
+    <arg name="paused" value="false"/>
+    <arg name="use_sim_time" value="true"/>
+    <arg name="gui" value="false"/>  <!-- Set to true if you want the Gazebo GUI -->
+    <arg name="headless" value="false"/>
+    <arg name="debug" value="false"/>
+  </include>
+  
+  <param name="robot_description" command="$(find xacro)/xacro $(find turtlebot3_description)/urdf/turtlebot3_$(arg model).urdf.xacro" />
+  <node pkg="gazebo_ros" type="spawn_model" name="spawn_urdf" args="-urdf -model turtlebot3_$(arg model) -x $(arg initial_pose_x) -y $(arg initial_pose_y) -z 0.0 -Y $(arg initial_pose_a) -param robot_description" />
+  
+  <node pkg="gmapping" type="slam_gmapping" name="turtlebot3_slam_gmapping" output="screen">
+    <param name="base_frame" value="base_footprint"/>
+    <param name="odom_frame" value="odom"/>
+    <param name="map_frame" value="map"/>
+    <param name="map_update_interval" value="2.0"/>
+    <param name="maxUrange" value="3.0"/>
+    <param name="minimumScore" value="50"/>
+    <param name="linearUpdate" value="0.2"/>
+    <param name="angularUpdate" value="0.1"/>
+    <param name="particles" value="100"/>
+  </node>
+  
+  <node pkg="move_base" type="move_base" respawn="false" name="move_base" output="screen">
+    <param name="base_local_planner" value="dwa_local_planner/DWAPlannerROS" />
+    <rosparam file="$(find maze_explorer)/param/costmap_common_params_burger.yaml" command="load" ns="global_costmap" />
+    <rosparam file="$(find maze_explorer)/param/costmap_common_params_burger.yaml" command="load" ns="local_costmap" />
+    <rosparam file="$(find maze_explorer)/param/local_costmap_params.yaml" command="load" />
+    <rosparam file="$(find maze_explorer)/param/global_costmap_params.yaml" command="load" />
+    <rosparam file="$(find maze_explorer)/param/dwa_local_planner_params_burger.yaml" command="load" />
+    <param name="move_forward_only" value="$(arg move_forward_only)"/>
+  </node>
+  
+  <include file="$(find turtlebot3_bringup)/launch/turtlebot3_remote.launch">
+    <arg name="model" value="$(arg model)"/>
+  </include>
+  
+  <group if="$(arg open_rviz)">
+    <node pkg="rviz" type="rviz" name="rviz" args="-d $(find maze_explorer)/config/maze_explorer.rviz"/>
+  </group>
+  
+  <node pkg="maze_explorer" type="rrt_explorer.py" name="rrt_explorer" output="screen">
+    <param name="target_x" value="$(arg target_pose_x)"/>
+    <param name="target_y" value="$(arg target_pose_y)"/>
+  </node>
+  
+  <node pkg="maze_explorer" type="waypoint_manager.py" name="waypoint_manager" output="screen"/>
+  
+  <node pkg="maze_explorer" type="path_planner.py" name="path_planner" output="screen">
+    <param name="start_x" value="$(arg initial_pose_x)"/>
+    <param name="start_y" value="$(arg initial_pose_y)"/>
+    <param name="target_x" value="$(arg target_pose_x)"/>
+    <param name="target_y" value="$(arg target_pose_y)"/>
+  </node>
+  
+  <node pkg="maze_explorer" type="visualization.py" name="visualization" output="screen"/>
+</launch>

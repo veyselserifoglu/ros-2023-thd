@@ -1,0 +1,62 @@
+# =================================================================
+#            Final DWA Planner Parameters for Maze Explorer
+# =================================================================
+# This configuration is designed for agility in tight spaces.
+
+DWAPlannerROS:
+  # Robot Configuration Parameters - For TurtleBot3 Burger
+  acc_lim_x: 2.5
+  acc_lim_y: 0.0          # Set to 0 for non-holonomic robots
+  acc_lim_th: 3.2         # High rotational acceleration for quick turns
+
+  max_vel_x: 0.22
+  min_vel_x: -0.1         # *** IMPORTANT: Allows the robot to move backward to get unstuck ***
+
+  max_vel_y: 0.0          # Set to 0 for non-holonomic robots
+  min_vel_y: 0.0          # Set to 0 for non-holonomic robots
+
+  # Use new parameter names for ROS Noetic
+  max_vel_trans: 0.22     # Translational velocity
+  min_vel_trans: 0.1      # Must be > 0
+
+  max_vel_theta: 1.8      # Rotational velocity
+  min_vel_theta: 0.4      # *** IMPORTANT: Ensures the robot is willing to turn from a standstill ***
+
+  # Goal Tolerance Parameters
+  yaw_goal_tolerance: 0.2   # Looser tolerance for yaw
+  xy_goal_tolerance: 0.15   # Looser tolerance for position
+  latch_xy_goal_tolerance: false
+
+  # Forward Simulation Parameters
+  sim_time: 2.0             # Increased simulation time to find more complex paths
+  sim_granularity: 0.025
+  vx_samples: 8
+  vy_samples: 1             # Set to 1 for non-holonomic robots
+  vth_samples: 20
+  controller_patience: 10.0 # How long to try before triggering recovery
+
+  # Trajectory Scoring Parameters - Tuned to prefer getting to the goal
+  path_distance_bias: 64.0  # Heavily prefer staying on the global path
+  goal_distance_bias: 24.0  # Prefer reaching the goal
+  occdist_scale: 0.02       # Be cautious of obstacles
+  forward_point_distance: 0.325
+  stop_time_buffer: 0.2
+  scaling_speed: 0.25
+  max_scaling_factor: 0.2
+
+  # Oscillation Prevention Parameters
+  oscillation_reset_dist: 0.05
+  oscillation_reset_angle: 0.2
+
+# Recovery Behaviors
+recovery_behaviors:
+  - name: 'conservative_reset'
+    type: 'clear_costmap_recovery/ClearCostmapRecovery'
+  - name: 'aggressive_reset'
+    type: 'clear_costmap_recovery/ClearCostmapRecovery'
+
+conservative_reset:
+  reset_distance: 3.0
+
+aggressive_reset:
+  reset_distance: 0.0

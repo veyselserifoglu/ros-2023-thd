@@ -1,0 +1,23 @@
+# Note: This is the fully corrected common costmap parameters file.
+
+# Defines the robot's footprint for collision checking
+footprint: [[-0.105, -0.105], [-0.105, 0.105], [0.041, 0.105], [0.041, -0.105]]
+
+# Obstacle Layer Parameters
+obstacle_layer:
+  enabled: true
+  # *** THIS IS THE KEY FIX ***
+  # Ensures the robot clears space as it moves, preventing it from trapping itself.
+  footprint_clearing_enabled: true
+  combination_method: 1
+  obstacle_range: 2.5
+  raytrace_range: 3.0
+  observation_sources: scan
+  scan: {sensor_frame: base_scan, data_type: LaserScan, topic: scan, marking: true, clearing: true}
+
+# Inflation Layer Parameters
+inflation_layer:
+  enabled: true
+  # This is the "buffer" around obstacles. Your previous tuning is good.
+  inflation_radius: 0.25
+  cost_scaling_factor: 3.0
